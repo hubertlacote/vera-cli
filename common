@@ -1,0 +1,30 @@
+#! /bin/bash
+
+set -euo pipefail
+
+where_am_i="${0%/*}"
+script_name=${0##*/}
+
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NO_COLOUR='\033[0m'
+
+info() {
+    echo -e "${BLUE}${script_name}: Info: ${1:-}${NO_COLOUR}"
+}
+
+error() {
+    echo -e "${RED}${script_name}: Error: ${1:-}${NO_COLOUR}" >&2
+}
+
+die() {
+    error "${1:-}"
+    exit 1
+}
+
+usage() {
+    [[ -z "${1:-}" ]] || error "${1:-}"
+    grep '^#/' $0 | cut -c 4- | sed \
+        -e "s/@PROGRAM@/${script_name}/g" >&2
+    exit 1;
+}

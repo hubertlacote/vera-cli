@@ -1,0 +1,92 @@
+#! /bin/bash
+
+##
+#/
+#/ Makes it easier to use Veracrypt for password-protected volumes.
+#/
+#/ Usage:
+#/
+#/   @PROGRAM@ -p <password> -v <volume_path> [OPTIONS]
+#/
+#/      -p <password>     Password used to encrypt the volume
+#/      -v <volume_path>  Path of the volume to mount
+#/
+#/   Options:
+#/
+#/      -r  Mount the volume as read-only
+#/
+#/   Example:
+#/
+#/      @PROGRAM@ -p "123" -v volume.tc
+#/
+#/
+
+where_am_i="${0%/*}"
+source "${where_am_i}/common"
+
+cleanup() {
+  local exit_code="${1}"
+  trap '' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
+
+  if veracrypt -t -l "${volume_path}" &>/dev/null; then
+    info "Unmounting '${volume_path}'..."
+    veracrypt -t -d "${volume_path}" ||
+      error "Failed to unmount '${volume_path}'"
+    info "Done!"
+  fi
+
+  exit "${exit_code}"
+}
+
+password=""
+volume_path=""
+while getopts "hp:rv:" option_name; do
+  case $option_name in
+    h) usage;;
+    p) password="${OPTARG:-}";;
+    r) read_only=1;;
+    v) volume_path="${OPTARG:-}";;
+  esac
+done
+
+[[ -n "${password:-}" ]] ||
+  usage "Please specify the volume password (-p)"
+
+[[ -n "${volume_path:-}" ]] ||
+  usage "Please specify the volume to mount (-v)"
+
+hash veracrypt ||
+  die "Veracrypt is not installed."
+
+[[ -b "${volume_path}" || -f "${volume_path}" ]] ||
+  die "Volume specified does not exist: '${volume_path}'"
+
+volume_path=$(readlink -f "${volume_path}") ||
+  die "Failed to resolve full path: '${volume_path}'"
+
+if veracrypt -t -l "${volume_path}" &>/dev/null; then
+  die "Volume is already mounted: '${volume_path}'"
+fi
+
+trap 'cleanup $?' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
+
+info "Mounting '${volume_path}'${read_only:+ as read-only}..."
+
+# See options in https://www.veracrypt.fr/en/Command%20Line%20Usage.html
+veracrypt -t --non-interactive --mount-options=timestamp${read_only:+",readonly"} "${volume_path}" -p "${password}" ||
+  die "Failed to mount '${volume_path}'"
+
+info "Successfully mounted '${volume_path}'"
+
+mount_point="$(veracrypt -t -l "${volume_path}" | awk '{ print $4 }')" ||
+  die "Failed to find the path of the mounted volume"
+
+info "Mount point: '${mount_point}'"
+
+# Write to the pipe the path of the mounted volume
+[[ -e /proc/$$/fd/3 ]] && echo "${mount_point}" >&3
+
+# Use exec so that signals are received (replace the process), could also wait on tail -f &
+tail -f /dev/null &
+tail_pid=$!
+wait $tail_pid
