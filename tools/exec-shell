@@ -1,0 +1,43 @@
+#!/bin/bash -ei
+
+set -euo pipefail
+
+##
+#/
+#/ Makes it possible to execute a shell in a different directory
+#/ without holding the directory open (e.g. preventing to unmount it).
+#/
+#/ Usage:
+#/
+#/   @PROGRAM@ [OPTIONS]
+#/
+#/   Options:
+#/
+#/      -C <directory>    Change current directory to the directory specified
+#/
+#/
+
+where_am_i="${0%/*}"
+source "${where_am_i}/common"
+
+location="${PWD}"
+while getopts "C:h" option_name; do
+  case $option_name in
+    C) location="${OPTARG:-}";;
+    h) usage;;
+  esac
+done
+
+# Make sure the options are not passed to the SHELL when executing
+shift $((OPTIND-1))
+
+[[ -n "${location:-}" ]] ||
+    usage
+
+[[ -d "${location}" ]] || {
+    echo "Directory specified does not exist: '${location}'"
+    exit 1
+}
+
+SHELL="bash"
+exec -c "$SHELL" --init-file <(echo "cd ${location}") "$@"
