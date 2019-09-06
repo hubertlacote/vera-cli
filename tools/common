@@ -1,7 +1,5 @@
 #! /bin/bash
 
-set -euo pipefail
-
 where_am_i="${0%/*}"
 script_name=${0##*/}
 
@@ -11,6 +9,10 @@ NO_COLOUR='\033[0m'
 
 info() {
     echo -e "${BLUE}${script_name}: Info: ${1:-}${NO_COLOUR}"
+}
+
+warn() {
+    echo -e "${RED}${script_name}: Warning: ${1:-}${NO_COLOUR}" >&2
 }
 
 error() {

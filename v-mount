@@ -1,5 +1,7 @@
 #! /bin/bash
 
+set -euo pipefail
+
 ##
 #/
 #/ Makes it easier to use Veracrypt for password-protected volumes.
@@ -19,10 +21,10 @@
 #/
 #/      @PROGRAM@ -p "123" -v volume.tc
 #/
-#/
+##
 
 where_am_i="${0%/*}"
-source "${where_am_i}/common"
+source "${where_am_i}/tools/common"
 
 cleanup() {
   local exit_code="${1}"
