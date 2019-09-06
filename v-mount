@@ -32,8 +32,16 @@ cleanup() {
 
   if veracrypt -t -l "${volume_path}" &>/dev/null; then
     info "Unmounting '${volume_path}'..."
-    veracrypt -t -d "${volume_path}" ||
-      error "Failed to unmount '${volume_path}'"
+
+    attempts=0
+    while ! veracrypt -t -d "${volume_path}" 2>/dev/null; do
+      if [[ $(( attempts % 10 )) -eq 0 ]]; then
+        warn "Still in use, waiting for:"
+        lsof -- ${mount_point} >&2
+      fi
+      attempts+=1
+      sleep 1
+    done
     info "Done!"
   fi
 
@@ -89,6 +97,6 @@ info "Mount point: '${mount_point}'"
 [[ -e /proc/$$/fd/3 ]] && echo "${mount_point}" >&3
 
 # Use exec so that signals are received (replace the process), could also wait on tail -f &
-tail -f /dev/null &
+tail -f /dev/null &>/dev/null &
 tail_pid=$!
 wait $tail_pid
