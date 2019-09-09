@@ -40,4 +40,4 @@ shift $((OPTIND-1))
 }
 
 SHELL="bash"
-exec -c "$SHELL" --init-file <(echo "cd ${location}") "$@"
+exec "$SHELL" --init-file <(echo "cd ${location}") "$@"
