@@ -30,6 +30,9 @@ cleanup() {
   local exit_code="${1}"
   trap '' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
 
+  [[ -z "${tail_pid}" ]] ||
+    kill ${tail_pid}
+
   if veracrypt -t -l "${volume_path}" &>/dev/null; then
     info "Unmounting '${volume_path}'..."
 
@@ -80,6 +83,7 @@ if veracrypt -t -l "${volume_path}" &>/dev/null; then
   die "Volume is already mounted: '${volume_path}'"
 fi
 
+tail_pid=""
 trap 'cleanup $?' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
 
 info "Mounting '${volume_path}'${read_only:+ as read-only}..."
