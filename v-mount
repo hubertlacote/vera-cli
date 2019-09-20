@@ -57,6 +57,7 @@ while getopts "hp:v:w" option_name; do
     p) password="${OPTARG:-}";;
     v) volume_path="${OPTARG:-}";;
     w) unset read_only;;
+    *) usage "Invalid flag."
   esac
 done
 
