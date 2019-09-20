@@ -15,7 +15,7 @@ set -euo pipefail
 #/
 #/   Options:
 #/
-#/      -r  Mount the volume as read-only
+#/      -w  Mount the volume as read-write (default to read-only)
 #/
 #/   Example:
 #/
@@ -49,13 +49,14 @@ cleanup() {
 }
 
 password=""
+read_only=1
 volume_path=""
-while getopts "hp:rv:" option_name; do
+while getopts "hp:v:w" option_name; do
   case $option_name in
     h) usage;;
     p) password="${OPTARG:-}";;
-    r) read_only=1;;
     v) volume_path="${OPTARG:-}";;
+    w) unset read_only;;
   esac
 done
 
