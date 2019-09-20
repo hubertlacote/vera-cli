@@ -7,6 +7,8 @@ set -euo pipefail
 #/ Makes it possible to execute a shell in a different directory
 #/ without holding the directory open (e.g. preventing to unmount it).
 #/
+#/ Cannot be executed recursively.
+#/
 #/ Usage:
 #/
 #/   @PROGRAM@ [OPTIONS]
@@ -38,6 +40,10 @@ shift $((OPTIND-1))
     echo "Directory specified does not exist: '${location}'"
     exit 1
 }
+
+[[ ${VCLI_IN_SHELL:-0} -eq 0 ]] ||
+  die "Already in a shell."
+export VCLI_IN_SHELL=1
 
 SHELL="bash"
 exec "$SHELL" --init-file <(echo "cd ${location}") "$@"
