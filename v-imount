@@ -13,6 +13,9 @@ source "${where_am_i}/tools/common"
 
 cleanup() {
   trap '' EXIT INT QUIT ABRT TERM
+  [[ -z "${pipe_path}" ]] ||
+    rm "${pipe_path}"
+
   [[ -z "${vmount_pid}" ]] || {
     while kill -0 ${vmount_pid} 2>/dev/null; do
       kill ${vmount_pid} 2>/dev/null
@@ -33,7 +36,9 @@ exec 3<>"${pipe_path}"
 v-mount $@ &
 vmount_pid=$!
 
-mount_point="$(head -n1 <&3)"
-rm "${pipe_path}"
+started_or_error="$(head -n1 <&3)"
+[[ "${started_or_error}" = "STARTED" ]] ||
+  die "Failed to execute v-mount."
 
+mount_point="$(head -n1 <&3)"
 "${where_am_i}"/tools/exec-shell -C "${mount_point}"

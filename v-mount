@@ -26,6 +26,16 @@ set -euo pipefail
 where_am_i="${0%/*}"
 source "${where_am_i}/tools/common"
 
+trap 'on_init_error $?' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
+
+on_init_error() {
+  local exit_code="${1}"
+  trap '' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
+  # Write to the pipe that something went wrong
+  [[ -e /proc/$$/fd/3 ]] && echo "Error - Exiting with ${exit_code}" >&3
+  exit "${exit_code}"
+}
+
 cleanup() {
   local exit_code="${1}"
   trap '' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
@@ -83,6 +93,8 @@ if veracrypt -t -l "${volume_path}" &>/dev/null; then
   die "Volume is already mounted: '${volume_path}'"
 fi
 
+# Write to the pipe that everything succeeded
+[[ -e /proc/$$/fd/3 ]] && echo "STARTED" >&3
 tail_pid=""
 trap 'cleanup $?' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
 
