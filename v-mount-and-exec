@@ -1,0 +1,73 @@
+#! /bin/bash
+
+set -euo pipefail
+
+##
+#/
+#/ Executes v-mount with the passed arguments, changes the working directory to
+#/ the mount point and executes the command passed after --.
+#/
+#/ Usage:
+#/
+#/  @PROGRAM@ [OPTIONS to pass to v-mount] -- COMMAND
+#/
+#/ Example:
+#/
+#/   @PROGRAM@ -p "123" -v volume.tc -- "echo Executed; pwd"
+#/
+##
+
+where_am_i="${0%/*}"
+source "${where_am_i}/tools/common"
+
+cleanup() {
+  trap '' EXIT INT QUIT ABRT TERM
+  [[ -z "${pipe_path}" ]] ||
+    rm "${pipe_path}"
+
+  [[ -z "${vmount_pid}" ]] || {
+    while kill -0 ${vmount_pid} 2>/dev/null; do
+      kill ${vmount_pid} 2>/dev/null
+      sleep 1
+    done
+  }
+  exit "${1}"
+}
+
+declare -a vmount_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    (-h | --help)
+      usage
+      ;;
+    (--)
+      shift
+      break
+      ;;
+    (*)
+      vmount_args+=("${1}")
+      shift
+      ;;
+  esac
+done
+
+vmount_pid=0
+pipe_path=""
+trap 'cleanup $?' EXIT INT QUIT ABRT TERM
+
+pipe_path=$(mktemp -u)
+mkfifo "${pipe_path}"
+exec 3<>"${pipe_path}"
+
+v-mount "${vmount_args[@]}" &
+vmount_pid=$!
+
+started_or_error="$(head -n1 <&3)"
+[[ "${started_or_error}" = "STARTED" ]] ||
+  die "Failed to execute v-mount."
+
+mount_point="$(head -n1 <&3)"
+[[ -d "${mount_point}" ]] ||
+  die "Mount point is not a valid directory: '${mount_point}'"
+
+"${where_am_i}"/tools/exec-shell -- -c "cd ${mount_point}; ${*}"
