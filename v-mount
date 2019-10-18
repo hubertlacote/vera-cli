@@ -9,9 +9,11 @@ set -euo pipefail
 #/ Usage:
 #/
 #/   @PROGRAM@ -p <password> -v <volume_path> [OPTIONS]
+#/   @PROGRAM@ -p <password> -V <disk_vendor> [OPTIONS]
 #/
 #/      -p <password>     Password used to encrypt the volume
 #/      -v <volume_path>  Path of the volume to mount
+#/      -V <disk_vendor>  Vendor of the disk to mount
 #/
 #/   Options:
 #/
@@ -20,6 +22,10 @@ set -euo pipefail
 #/   Example:
 #/
 #/      @PROGRAM@ -p "123" -v volume.tc
+#/
+#/      @PROGRAM@ -p "123" -v /dev/sdb1
+#/
+#/      @PROGRAM@ -p "123" -V Kingston
 #/
 ##
 
@@ -61,14 +67,33 @@ cleanup() {
   exit "${exit_code}"
 }
 
+find_volume_path_from_disk_vendor() {
+  local disk_vendor="${1}"
+  local devices_matching
+  devices_matching="$(lsblk --output NAME,VENDOR --sort NAME --noheadings --raw --paths | grep "${disk_vendor}")" || {
+    error "Did not find any devices matching disk vendor '${disk_vendor}'"
+    return 1
+  }
+  nb_devices_matching=$(echo "${devices_matching}" | wc -l)
+  [[ ${nb_devices_matching} -eq 1 ]] ||
+    warn "More than one device matching disk vendor '${disk_vendor}':\n${devices_matching}"
+  disk_path=$(echo -n "${devices_matching}" | head -1 | cut -f 1 -d " ") || {
+    error "Failed to extract volume path from '${devices_matching}'"
+    return 1
+  }
+  echo "${disk_path}1"
+}
+
 password=""
 read_only=1
 volume_path=""
-while getopts "hp:v:w" option_name; do
+disk_vendor=""
+while getopts "hp:v:V:w" option_name; do
   case $option_name in
     h) usage;;
     p) password="${OPTARG:-}";;
     v) volume_path="${OPTARG:-}";;
+    V) disk_vendor="${OPTARG:-}";;
     w) unset read_only;;
     *) usage "Invalid flag."
   esac
@@ -77,11 +102,22 @@ done
 [[ -n "${password:-}" ]] ||
   usage "Please specify the volume password (-p)"
 
-[[ -n "${volume_path:-}" ]] ||
-  usage "Please specify the volume to mount (-v)"
+[[ -n "${volume_path:-}" || -n "${disk_vendor:-}" ]] ||
+  usage "Please specify the volume to mount (-v or -V)"
+
+if [[ -n "${volume_path:-}" && -n "${disk_vendor:-}" ]]; then
+  usage "Incompatible options: volume path (-v) and disk vendor (-V)"
+fi
 
 hash veracrypt ||
   die "Veracrypt is not installed."
+
+if [[ -n "${disk_vendor:-}" ]]; then
+  hash lsblk ||
+    die "lsblk is not installed: cannot use disk vendor option (-V)."
+  volume_path="$(find_volume_path_from_disk_vendor "${disk_vendor}")" ||
+    die "Failed to find volume path from disk vendor (option -V)"
+fi
 
 [[ -b "${volume_path}" || -f "${volume_path}" ]] ||
   die "Volume specified does not exist: '${volume_path}'"
