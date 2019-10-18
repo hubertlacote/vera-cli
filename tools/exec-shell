@@ -11,7 +11,7 @@ set -euo pipefail
 #/
 #/ Usage:
 #/
-#/   @PROGRAM@ [OPTIONS]
+#/   @PROGRAM@ [OPTIONS] [-- OPTIONS to pass to SHELL]
 #/
 #/   Options:
 #/
@@ -19,19 +19,32 @@ set -euo pipefail
 #/
 #/
 
+SHELL="bash"
 where_am_i="${0%/*}"
 source "${where_am_i}/common"
 
 location="${PWD}"
-while getopts "C:h" option_name; do
-  case $option_name in
-    C) location="${OPTARG:-}";;
-    h) usage;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    (-h | --help)
+      usage
+      ;;
+    (-l | --location)
+      shift;
+      location="${1}" ||
+        usage "No location passed"
+      shift;
+      ;;
+    (--)
+      shift;
+      # Pass everything after -- to SHELL
+      break;
+      ;;
+    (*)
+      usage "Unsupported option: '${1}'"
+      ;;
   esac
 done
-
-# Make sure the options are not passed to the SHELL when executing
-shift $((OPTIND-1))
 
 [[ -n "${location:-}" ]] ||
     usage
@@ -45,5 +58,4 @@ shift $((OPTIND-1))
   die "Already in a shell."
 export VCLI_IN_SHELL=1
 
-SHELL="bash"
 exec "$SHELL" --init-file <(echo "cd ${location}") "$@"

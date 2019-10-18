@@ -41,4 +41,4 @@ started_or_error="$(head -n1 <&3)"
   die "Failed to execute v-mount."
 
 mount_point="$(head -n1 <&3)"
-"${where_am_i}"/tools/exec-shell -C "${mount_point}"
+"${where_am_i}"/tools/exec-shell --location "${mount_point}"
