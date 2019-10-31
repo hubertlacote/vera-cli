@@ -17,7 +17,7 @@ set -euo pipefail
 #/
 #/      -C <directory>    Change current directory to the directory specified
 #/
-#/
+##
 
 SHELL="bash"
 where_am_i="${0%/*}"
