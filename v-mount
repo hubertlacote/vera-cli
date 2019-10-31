@@ -58,8 +58,9 @@ cleanup() {
         warn "Still in use, waiting for:"
         lsof -- ${mount_point} >&2
       fi
-      attempts+=1
+      attempts=$(( attempts + 1 ))
       sleep 1
+      echo -n "."
     done
     info "Done!"
   fi
