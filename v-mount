@@ -9,15 +9,26 @@ set -euo pipefail
 #/ Usage:
 #/
 #/   @PROGRAM@ -p <password> -v <volume_path> [OPTIONS]
+#/   @PROGRAM@ -p <password> -M <disk_model> [OPTIONS]
 #/   @PROGRAM@ -p <password> -V <disk_vendor> [OPTIONS]
 #/
-#/      -p <password>     Password used to encrypt the volume
-#/      -v <volume_path>  Path of the volume to mount
-#/      -V <disk_vendor>  Vendor of the disk to mount
+#/       -p <password>     Password used to encrypt the volume
 #/
-#/   Options:
+#/   Volume selection, one of:
 #/
-#/      -w  Mount the volume as read-write (default to read-only)
+#/       -v <volume_path>  Path of the volume to mount
+#/       -M <disk_model>   Model of the disk to mount
+#/       -V <disk_vendor>  Vendor of the disk to mount
+#/
+#/   OPTIONS:
+#/
+#/     General:
+#/
+#/       -w  Mount the volume as read-write (default to read-only)
+#/
+#/     Volume selection:
+#/
+#/       -P <partition_no> Number of the patition to mount (for -V and -M)
 #/
 #/   Example:
 #/
@@ -25,7 +36,11 @@ set -euo pipefail
 #/
 #/      @PROGRAM@ -p "123" -v /dev/sdb1
 #/
-#/      @PROGRAM@ -p "123" -V Kingston
+#/      @PROGRAM@ -p "123" -V "Kingston"
+#/      @PROGRAM@ -p "123" -V "Kingston" -P 2
+#/
+#/      @PROGRAM@ -p "123" -M "Samsung T5"
+#/      @PROGRAM@ -p "123" -M "Samsung T5" -P 3
 #/
 ##
 
@@ -55,8 +70,13 @@ cleanup() {
     attempts=0
     while ! veracrypt -t -d "${volume_path}" 2>/dev/null; do
       if [[ $(( attempts % 10 )) -eq 0 ]]; then
-        warn "Still in use, waiting for:"
-        lsof -- ${mount_point} >&2
+        if [[ -e "${mount_point}" ]]; then
+          warn "Still in use, waiting for:"
+          lsof -- ${mount_point} >&2
+        else
+          error "Failed to unmount."
+          exit 1
+        fi
       fi
       attempts=$(( attempts + 1 ))
       sleep 1
@@ -82,17 +102,38 @@ find_volume_path_from_disk_vendor() {
     error "Failed to extract volume path from '${devices_matching}'"
     return 1
   }
-  echo "${disk_path}1"
+  echo "${disk_path}"
+}
+
+find_volume_path_from_disk_model() {
+  local disk_model="${1}"
+  local devices_matching
+  devices_matching="$(lsblk --output NAME,MODEL --sort NAME --noheadings --raw --paths | grep "${disk_model}")" || {
+    error "Did not find any devices matching disk model '${disk_model}'"
+    return 1
+  }
+  nb_devices_matching=$(echo "${devices_matching}" | wc -l)
+  [[ ${nb_devices_matching} -eq 1 ]] ||
+    warn "More than one device matching disk model '${disk_model}':\n${devices_matching}"
+  disk_path=$(echo -n "${devices_matching}" | head -1 | cut -f 1 -d " ") || {
+    error "Failed to extract volume path from '${devices_matching}'"
+    return 1
+  }
+  echo "${disk_path}"
 }
 
 password=""
 read_only=1
 volume_path=""
 disk_vendor=""
-while getopts "hp:v:V:w" option_name; do
+disk_model=""
+partition_no=1
+while getopts "hM:p:P:v:V:w" option_name; do
   case $option_name in
     h) usage;;
+    M) disk_model="${OPTARG:-}";;
     p) password="${OPTARG:-}";;
+    P) partition_no="${OPTARG:-}";;
     v) volume_path="${OPTARG:-}";;
     V) disk_vendor="${OPTARG:-}";;
     w) unset read_only;;
@@ -103,11 +144,17 @@ done
 [[ -n "${password:-}" ]] ||
   usage "Please specify the volume password (-p)"
 
-[[ -n "${volume_path:-}" || -n "${disk_vendor:-}" ]] ||
-  usage "Please specify the volume to mount (-v or -V)"
+[[ -n "${volume_path:-}" || -n "${disk_vendor:-}" || -n "${disk_model:-}" ]] ||
+  usage "Please specify the volume to mount (-v or -V or -M)"
 
 if [[ -n "${volume_path:-}" && -n "${disk_vendor:-}" ]]; then
   usage "Incompatible options: volume path (-v) and disk vendor (-V)"
+fi
+if [[ -n "${volume_path:-}" && -n "${disk_model:-}" ]]; then
+  usage "Incompatible options: volume path (-v) and disk model (-M)"
+fi
+if [[ -n "${disk_vendor:-}" && -n "${disk_model:-}" ]]; then
+  usage "Incompatible options: disk vendor (-V) and disk model (-M)"
 fi
 
 hash veracrypt ||
@@ -116,8 +163,13 @@ hash veracrypt ||
 if [[ -n "${disk_vendor:-}" ]]; then
   hash lsblk ||
     die "lsblk is not installed: cannot use disk vendor option (-V)."
-  volume_path="$(find_volume_path_from_disk_vendor "${disk_vendor}")" ||
+  volume_path="$(find_volume_path_from_disk_vendor "${disk_vendor}")${partition_no}" ||
     die "Failed to find volume path from disk vendor (option -V)"
+elif [[ -n "${disk_model:-}" ]]; then
+  hash lsblk ||
+    die "lsblk is not installed: cannot use disk model option (-M)."
+  volume_path="$(find_volume_path_from_disk_model "${disk_model}")${partition_no}" ||
+    die "Failed to find volume path from disk model (option -M)"
 fi
 
 [[ -b "${volume_path}" || -f "${volume_path}" ]] ||
