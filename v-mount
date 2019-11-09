@@ -12,19 +12,20 @@ set -euo pipefail
 #/   @PROGRAM@ -p <password> -M <disk_model> [OPTIONS]
 #/   @PROGRAM@ -p <password> -V <disk_vendor> [OPTIONS]
 #/
-#/       -p <password>     Password used to encrypt the volume
+#/       -p <password>          Password used to encrypt the volume
 #/
 #/   Volume selection, one of:
 #/
-#/       -v <volume_path>  Path of the volume to mount
-#/       -M <disk_model>   Model of the disk to mount
-#/       -V <disk_vendor>  Vendor of the disk to mount
+#/       -v <volume_path>       Path of the volume to mount
+#/       -M <disk_model>        Model of the disk to mount
+#/       -V <disk_vendor>       Vendor of the disk to mount
 #/
 #/   OPTIONS:
 #/
 #/     General:
 #/
-#/       -w  Mount the volume as read-write (default to read-only)
+#/       -m  <mount_point>  Mount point for the volume
+#/       -w                     Mount the volume as read-write (default to read-only)
 #/
 #/     Volume selection:
 #/
@@ -33,6 +34,7 @@ set -euo pipefail
 #/   Example:
 #/
 #/      @PROGRAM@ -p "123" -v volume.tc
+#/      @PROGRAM@ -p "123" -v volume.tc -m /data
 #/
 #/      @PROGRAM@ -p "123" -v /dev/sdb1
 #/
@@ -128,9 +130,10 @@ volume_path=""
 disk_vendor=""
 disk_model=""
 partition_no=1
-while getopts "hM:p:P:v:V:w" option_name; do
+while getopts "hm:M:p:P:v:V:w" option_name; do
   case $option_name in
     h) usage;;
+    m) mount_point="${OPTARG:-}";;
     M) disk_model="${OPTARG:-}";;
     p) password="${OPTARG:-}";;
     P) partition_no="${OPTARG:-}";;
@@ -187,18 +190,23 @@ fi
 tail_pid=""
 trap 'cleanup $?' EXIT SIGINT SIGQUIT SIGABRT SIGTERM
 
-info "Mounting '${volume_path}'${read_only:+ as read-only}..."
+info "Mounting '${volume_path}'${read_only:+ as read-only}${mount_point:+to "${mount_point}"}..."
 
 # See options in https://www.veracrypt.fr/en/Command%20Line%20Usage.html
-veracrypt -t --non-interactive --mount-options=timestamp${read_only:+",readonly"} "${volume_path}" -p "${password}" ||
+veracrypt -t --non-interactive \
+  --mount-options=timestamp${read_only:+",readonly"} \
+  -p "${password}" \
+  "${volume_path}" ${mount_point:+"${mount_point}"} ||
   die "Failed to mount '${volume_path}'"
 
 info "Successfully mounted '${volume_path}'"
 
-mount_point="$(veracrypt -t -l "${volume_path}" | awk '{ print $4 }')" ||
-  die "Failed to find the path of the mounted volume"
+if [[ -z "${mount_point:-}" ]]; then
+  mount_point="$(veracrypt -t -l "${volume_path}" | awk '{ print $4 }')" ||
+    die "Failed to find the path of the mounted volume"
 
-info "Mount point: '${mount_point}'"
+  info "Mount point: '${mount_point}'"
+fi
 
 # Write to the pipe the path of the mounted volume
 [[ -e /proc/$$/fd/3 ]] && echo "${mount_point}" >&3
