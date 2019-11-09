@@ -1,13 +1,12 @@
-#!/bin/bash -ei
+#!/bin/bash -i
 
+set +o history
 set -euo pipefail
 
 ##
 #/
 #/ Makes it possible to execute a shell in a different directory
-#/ without holding the directory open (e.g. preventing to unmount it).
-#/
-#/ Cannot be executed recursively.
+#/ without holding the directory open (e.g. preventing from unmounting it).
 #/
 #/ Usage:
 #/
@@ -20,6 +19,9 @@ set -euo pipefail
 ##
 
 SHELL="bash"
+CYAN='\033[1;36m'
+NO_COLOUR='\033[0m'
+
 where_am_i="${0%/*}"
 source "${where_am_i}/common"
 
@@ -58,4 +60,11 @@ done
   die "Already in a shell."
 export VCLI_IN_SHELL=1
 
-exec "$SHELL" --init-file <(echo "cd ${location}") "$@"
+cd "${location}"
+
+PS1_VALUE="${CYAN}${PS1}${NO_COLOUR}"
+
+# Not using the bash login option -l since we want to override PS1.
+
+set -o history
+exec "$SHELL" --init-file <(echo "source ~/.bashrc; PS1='${PS1_VALUE}'") "$@"
