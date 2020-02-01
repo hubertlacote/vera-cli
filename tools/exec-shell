@@ -18,9 +18,9 @@ set -euo pipefail
 ##
 
 SHELL="bash"
-CYAN='\033[1;36m'
-NO_COLOUR='\033[0m'
 
+CYAN_ESCAPED='\[\033[1;36m\]'
+NO_COLOUR_ESCAPED='\[\033[0m\]'
 where_am_i="${0%/*}"
 source "${where_am_i}/common"
 
@@ -61,7 +61,7 @@ export VCLI_IN_SHELL=1
 
 cd "${location}"
 
-PS1_VALUE="${CYAN}${PS1}${NO_COLOUR}"
+PS1_VALUE="$(bash -ic 'echo "$PS1"')${CYAN_ESCAPED}[v-shell]\$${NO_COLOUR_ESCAPED} "
 
 # Not using the bash login option -l since we want to override PS1.
 
