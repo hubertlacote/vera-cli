@@ -1,6 +1,5 @@
-#!/bin/bash -i
+#!/bin/bash
 
-set +o history
 set -euo pipefail
 
 ##
@@ -66,5 +65,4 @@ PS1_VALUE="${CYAN}${PS1}${NO_COLOUR}"
 
 # Not using the bash login option -l since we want to override PS1.
 
-set -o history
 exec "$SHELL" --init-file <(echo "source ~/.bashrc; PS1='${PS1_VALUE}'") "$@"
