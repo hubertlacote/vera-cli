@@ -1,0 +1,94 @@
+#!/bin/bash
+
+##
+#/
+#/ Backup directories from the home folder to the current working directory:
+#/ 1/ Check that the file 'backup-ready' exists in the current directory.
+#/ 2/ Call rsync to sync the home folder to the current directory.
+#/
+#/ Usage:
+#/
+#/   backup [OPTIONS]
+#/
+#/   Options:
+#/
+#/      -n  Dry-run
+#/
+##
+
+script="${0}"
+
+SOURCE_DIR="${HOME}"
+DEST_DIR="${PWD}"
+DEST_DIR_FILE_TO_CHECK=backup-ready
+
+usage() {
+    [[ -z "${1:-}" ]] || echo "${1:-}" >&2
+    grep '^#/' "$0" | cut -c 4- >&2
+    exit 1;
+}
+
+die() {
+  echo "${1}" >&2
+  exit 1
+}
+
+get_timestamp() {
+  date +%Y-%m-%d_%H-%M-%S
+}
+
+while getopts "hn" option_name; do
+  case $option_name in
+    h) usage;;
+    n) dry_run=1; echo "Dry run requested.";;
+    *) usage "Invalid flag."
+  esac
+done
+
+[[ -f "${DEST_DIR}/${DEST_DIR_FILE_TO_CHECK}" ]] || {
+  echo "Aborted. The file '${DEST_DIR}/${DEST_DIR_FILE_TO_CHECK}' does not exist." >&2
+  echo "Create it to backup '${SOURCE_DIR}' to '${DEST_DIR}'" >&2
+  exit 1
+}
+
+# Exclude hidden files
+declare -a excludes
+excludes=()
+excludes+=("--exclude" "/.*")
+
+# Always backup to the same directory to be able to rsync the difference easily
+timestamp="$(get_timestamp)"
+link_name="latest"
+full_dest_dir="${DEST_DIR}/${link_name}"
+mkdir -p "${full_dest_dir}" ||
+  die "Failed to create '${full_dest_dir}'"
+echo "Backing up '${SOURCE_DIR}' to '${full_dest_dir}'..."
+
+rsync -avh \
+  ${dry_run:+"-n"} \
+  "${excludes[@]}" \
+  --delete-before \
+  --delete-excluded \
+  --inplace \
+  "${SOURCE_DIR}"/ "${full_dest_dir}" ||
+    die "Backup failed"
+
+if [[ ${dry_run:-0} -eq 1 ]]; then
+  exit 0
+fi
+
+echo "Successfully backed up '${SOURCE_DIR}' to '${full_dest_dir}'!"
+
+# Name the backup directory according to the date/time of the backup
+if [[ -L "${full_dest_dir}" ]]; then
+  old_backup_dir=$(readlink -f "${full_dest_dir}")
+  echo -e "Moving backup directory from:\n\t- ${old_backup_dir} to\n\t- ${DEST_DIR}/${timestamp}"
+  mv "${old_backup_dir}" "${DEST_DIR}/${timestamp}"
+  rm -f "${full_dest_dir}"
+elif [[ -d "${full_dest_dir}" ]]; then
+  echo -e "First backup, creating ${DEST_DIR}/${timestamp}."
+  mv "${full_dest_dir}" "${DEST_DIR}/${timestamp}"
+else
+  die "Something went horribly wrong: ${full_dest_dir} is neither a directory not a symlink."
+fi
+cd "${DEST_DIR}" && ln -s "${timestamp}" "${link_name}"

@@ -24,12 +24,12 @@ set -euo pipefail
 #/
 #/     General:
 #/
-#/       -m  <mount_point>  Mount point for the volume
+#/       -m  <mount_point>      Mount point for the volume
 #/       -w                     Mount the volume as read-write (default to read-only)
 #/
 #/     Volume selection:
 #/
-#/       -P <partition_no> Number of the patition to mount (for -V and -M)
+#/       -P <partition_no>      Number of the partition to mount (for -V and -M)
 #/
 #/   Example:
 #/
